@@ -25,15 +25,7 @@ type CredentialEvidenceItem struct {
 }
 
 func (s *Service) verifyCredentialPayload(ctx context.Context, rev domain.FrozenRevision) error {
-	cacheKey := fmt.Sprintf("%s\x00%s\x00%d", rev.StorageKey, rev.ContentDigest, rev.SizeBytes)
-	if _, ok := s.verifiedPayloads.Load(cacheKey); ok {
-		return nil
-	}
-	if err := s.payloads.Verify(ctx, rev.StorageKey, rev.ContentDigest, rev.SizeBytes); err != nil {
-		return err
-	}
-	s.verifiedPayloads.Store(cacheKey, struct{}{})
-	return nil
+	return s.payloads.Verify(ctx, rev.StorageKey, rev.ContentDigest, rev.SizeBytes)
 }
 
 func (s *Service) GetCase(ctx context.Context, id string) (*domain.InspectionCase, error) {

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 
 	"benzhi-project-a01cfa2a-e194-4175-9b12-49a2ff610cc7/internal/domain"
 )
@@ -13,11 +12,10 @@ import (
 const maxRadiographBytes int64 = 32 << 20
 
 type Service struct {
-	repository       Repository
-	payloads         PayloadStore
-	clock            Clock
-	ids              IDGenerator
-	verifiedPayloads sync.Map
+	repository Repository
+	payloads   PayloadStore
+	clock      Clock
+	ids        IDGenerator
 }
 
 func NewService(repository Repository, payloads PayloadStore, clock Clock, ids IDGenerator) *Service {
