@@ -66,13 +66,17 @@ func (s *FilePayloadStore) Put(ctx context.Context, expectedDigest string, sourc
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", "", 0, err
 	}
+	// Honor cancellation before committing the file: once the rename lands
+	// the content-addressed object is permanent, so a cancelled upload must
+	// surface the cancellation here while the temporary file is still
+	// removable and no formal payload has been committed.
+	if err := ctx.Err(); err != nil {
+		return "", "", 0, err
+	}
 	if err := os.Rename(tempName, destination); err != nil {
 		return "", "", 0, err
 	}
 	if err := os.Chmod(destination, 0o640); err != nil {
-		return "", "", 0, err
-	}
-	if err := ctx.Err(); err != nil {
 		return "", "", 0, err
 	}
 	return filepath.ToSlash(key), digest, written, nil
