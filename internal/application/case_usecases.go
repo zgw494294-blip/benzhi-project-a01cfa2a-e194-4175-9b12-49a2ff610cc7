@@ -77,14 +77,17 @@ func (s *Service) SubmitRevision(ctx context.Context, cmd SubmitRevisionCommand)
 	rev := domain.RadiographRevision{ID: s.ids.NewID("rev"), CaptureBatch: cmd.CaptureBatch, ViewCode: cmd.ViewCode, CoveredZone: cmd.CoveredZone, ExposureParameters: cmd.Exposure, ContentDigest: digest, StorageKey: storageKey, SizeBytes: size, SupersedesRevisionID: cmd.SupersedesRevisionID, SubmittedAt: now}
 	previous := c.Version
 	if err := c.AddRevision(rev, now); err != nil {
+		s.deleteUnreferencedPayload(ctx, storageKey)
 		return nil, err
 	}
 	result, err := encodeResult(c)
 	if err != nil {
+		s.deleteUnreferencedPayload(ctx, storageKey)
 		return nil, err
 	}
 	e := s.eventAt(c, "revision.submitted", cmd.Meta.Principal, map[string]any{"revisionId": rev.ID, "digest": digest, "sizeBytes": size})
 	if err := s.repository.Save(ctx, c, previous, e, cmd.Meta.IdempotencyKey, result); err != nil {
+		s.deleteUnreferencedPayload(ctx, storageKey)
 		return nil, err
 	}
 	return c, nil

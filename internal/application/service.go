@@ -58,6 +58,18 @@ func (s *Service) eventAt(c *domain.InspectionCase, action string, p Principal, 
 	return domain.AuditEvent{ID: s.ids.NewID("evt"), CaseID: c.ID, Action: action, Actor: p.Name, Role: string(p.Role), Version: c.Version, At: s.clock.Now(), Details: details}
 }
 
+// deleteUnreferencedPayload is a best-effort cleanup invoked after a freshly
+// created payload could not be associated with a committed revision. Because
+// Put only returns a storage key when it created a new content-addressed file
+// (it rejects pre-existing digests with ErrDuplicate), and the aggregate save
+// has just failed, the file is not referenced by any committed revision.
+// Errors are intentionally swallowed: the caller already holds a more
+// significant failure to report, and a missing or busy file must not mask it.
+func (s *Service) deleteUnreferencedPayload(ctx context.Context, storageKey string) {
+	cleanupCtx := context.WithoutCancel(ctx)
+	_ = s.payloads.Delete(cleanupCtx, storageKey)
+}
+
 func (s *Service) loadForWrite(ctx context.Context, id string, meta CommandMeta, allowed ...Role) (*domain.InspectionCase, error) {
 	if err := meta.Principal.Validate(allowed...); err != nil {
 		return nil, err

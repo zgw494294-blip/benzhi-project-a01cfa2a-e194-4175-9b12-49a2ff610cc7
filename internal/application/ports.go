@@ -24,6 +24,7 @@ type PayloadStore interface {
 	Put(ctx context.Context, expectedDigest string, source io.Reader, maxBytes int64) (storageKey, digest string, size int64, err error)
 	Open(ctx context.Context, storageKey string) (io.ReadCloser, int64, error)
 	Verify(ctx context.Context, storageKey, digest string, size int64) error
+	Delete(ctx context.Context, storageKey string) error
 }
 
 type Clock interface{ Now() time.Time }

@@ -117,6 +117,28 @@ func (s *FilePayloadStore) Verify(ctx context.Context, storageKey, digest string
 	return nil
 }
 
+// Delete removes a payload identified by storageKey. It is idempotent: a
+// missing file is not an error, which keeps cleanup safe to retry after
+// partial failures. Callers must only delete payloads they created in the
+// same operation and that have not been referenced by a committed revision,
+// since the content-addressed layout is shared across cases.
+func (s *FilePayloadStore) Delete(ctx context.Context, storageKey string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	path, err := s.safePath(storageKey)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 func (s *FilePayloadStore) safePath(key string) (string, error) {
 	clean := filepath.Clean(filepath.FromSlash(key))
 	if filepath.IsAbs(clean) || clean == "." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
