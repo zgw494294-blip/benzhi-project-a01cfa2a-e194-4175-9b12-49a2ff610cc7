@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"reflect"
+	"strings"
 
 	"benzhi-project-a01cfa2a-e194-4175-9b12-49a2ff610cc7/internal/domain"
 )
@@ -49,7 +50,7 @@ func (s *Service) CreateCase(ctx context.Context, cmd CreateCaseCommand) (*domai
 }
 
 func (s *Service) SubmitRevision(ctx context.Context, cmd SubmitRevisionCommand) (*domain.InspectionCase, error) {
-	if replay, ok, err := s.replaySubmittedRevision(ctx, cmd.Meta.IdempotencyKey); err != nil || ok {
+	if replay, ok, err := s.replaySubmittedRevision(ctx, cmd); err != nil || ok {
 		return replay, err
 	}
 	if err := cmd.Meta.Principal.Validate(RoleOperator); err != nil {
@@ -90,15 +91,68 @@ func (s *Service) SubmitRevision(ctx context.Context, cmd SubmitRevisionCommand)
 	return c, nil
 }
 
-func (s *Service) replaySubmittedRevision(ctx context.Context, key string) (*domain.InspectionCase, bool, error) {
-	replay, ok, err := decodeReplay[domain.InspectionCase](ctx, s.repository, key, "submit_revision")
-	if err != nil {
-		return nil, false, err
+func (s *Service) replaySubmittedRevision(ctx context.Context, cmd SubmitRevisionCommand) (*domain.InspectionCase, bool, error) {
+	replay, ok, err := decodeReplay[domain.InspectionCase](ctx, s.repository, cmd.Meta.IdempotencyKey, "submit_revision")
+	if err != nil || !ok {
+		return nil, ok, err
 	}
-	if !ok {
-		return nil, false, nil
+	// An idempotency key can only replay the very same submission: the same
+	// task and the same submitted content. A replay produced by a different
+	// task (different caseId), a different optimistic version, or divergent
+	// revision metadata must surface as an idempotency conflict instead of
+	// silently returning another task's aggregate. The conflict is detected
+	// before any state is loaded or mutated, so the caller's task stays
+	// untouched.
+	if !replayedRevisionMatches(replay, cmd) {
+		return nil, false, domain.ErrIdempotencyConflict
 	}
 	return replay, true, nil
+}
+
+// replayedRevisionMatches reports whether the replayed aggregate corresponds
+// to the same submission described by cmd. The replay stores the aggregate as
+// it was after AddRevision, so replay.Version == cmd.ExpectedVersion + 1 and
+// the last revision is the one produced by this command.
+func replayedRevisionMatches(replay *domain.InspectionCase, cmd SubmitRevisionCommand) bool {
+	if replay == nil {
+		return false
+	}
+	if replay.ID != strings.TrimSpace(cmd.CaseID) {
+		return false
+	}
+	if replay.Version != cmd.Meta.ExpectedVersion+1 {
+		return false
+	}
+	if len(replay.Revisions) == 0 {
+		return false
+	}
+	rev := replay.Revisions[len(replay.Revisions)-1]
+	if rev.CaseID != strings.TrimSpace(cmd.CaseID) {
+		return false
+	}
+	if rev.CaptureBatch != strings.TrimSpace(cmd.CaptureBatch) {
+		return false
+	}
+	if rev.ViewCode != strings.TrimSpace(cmd.ViewCode) {
+		return false
+	}
+	if rev.CoveredZone != strings.TrimSpace(cmd.CoveredZone) {
+		return false
+	}
+	if rev.SupersedesRevisionID != strings.TrimSpace(cmd.SupersedesRevisionID) {
+		return false
+	}
+	if !reflect.DeepEqual(rev.ExposureParameters, cmd.Exposure) {
+		return false
+	}
+	// The stored ContentDigest is the verified digest produced by the
+	// PayloadStore. For a successful submission it equals the caller's
+	// declared ExpectedDigest; replaying a mismatched declared digest is a
+	// different submission and must conflict.
+	if rev.ContentDigest != strings.ToLower(strings.TrimSpace(cmd.ExpectedDigest)) {
+		return false
+	}
+	return true
 }
 
 func (s *Service) RunCheck(ctx context.Context, caseID string, meta CommandMeta) (*domain.InspectionCase, error) {
