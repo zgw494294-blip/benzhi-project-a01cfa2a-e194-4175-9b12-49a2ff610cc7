@@ -49,7 +49,7 @@ func (s *Service) CreateCase(ctx context.Context, cmd CreateCaseCommand) (*domai
 }
 
 func (s *Service) SubmitRevision(ctx context.Context, cmd SubmitRevisionCommand) (*domain.InspectionCase, error) {
-	if replay, ok, err := decodeReplay[domain.InspectionCase](ctx, s.repository, cmd.Meta.IdempotencyKey, "submit_revision"); err != nil || ok {
+	if replay, ok, err := s.replaySubmittedRevision(ctx, cmd.Meta.IdempotencyKey); err != nil || ok {
 		return replay, err
 	}
 	if err := cmd.Meta.Principal.Validate(RoleOperator); err != nil {
@@ -88,6 +88,17 @@ func (s *Service) SubmitRevision(ctx context.Context, cmd SubmitRevisionCommand)
 		return nil, err
 	}
 	return c, nil
+}
+
+func (s *Service) replaySubmittedRevision(ctx context.Context, key string) (*domain.InspectionCase, bool, error) {
+	replay, ok, err := decodeReplay[domain.InspectionCase](ctx, s.repository, key, "submit_revision")
+	if err != nil {
+		return nil, false, err
+	}
+	if !ok {
+		return nil, false, nil
+	}
+	return replay, true, nil
 }
 
 func (s *Service) RunCheck(ctx context.Context, caseID string, meta CommandMeta) (*domain.InspectionCase, error) {
