@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"sync"
 
 	"benzhi-project-a01cfa2a-e194-4175-9b12-49a2ff610cc7/internal/domain"
 )
@@ -78,12 +79,18 @@ func (s *Service) VerifyCredential(ctx context.Context, number string) (*Credent
 	items = append(items, CredentialEvidenceItem{Type: "frozen_version", Reference: fmt.Sprint(credential.FrozenVersion), Valid: versionValid, Message: map[bool]string{true: "凭据与冻结版本一致", false: "凭据与冻结版本不一致"}[versionValid]})
 	valid := credValid && snapshotValid && versionValid
 	if c.Frozen != nil {
+		var payloadChecks sync.WaitGroup
 		for _, rev := range c.Frozen.Revisions {
-			err := s.payloads.Verify(ctx, rev.StorageKey, rev.ContentDigest, rev.SizeBytes)
-			ok := err == nil
-			items = append(items, CredentialEvidenceItem{Type: "payload", Reference: rev.ID, Valid: ok, Message: map[bool]string{true: "底片载荷摘要与大小通过", false: "底片载荷缺失或摘要不一致"}[ok], Digest: rev.ContentDigest})
-			valid = valid && ok
+			payloadChecks.Add(1)
+			go func(rev domain.FrozenRevision) {
+				defer payloadChecks.Done()
+				err := s.payloads.Verify(ctx, rev.StorageKey, rev.ContentDigest, rev.SizeBytes)
+				ok := err == nil
+				items = append(items, CredentialEvidenceItem{Type: "payload", Reference: rev.ID, Valid: ok, Message: map[bool]string{true: "底片载荷摘要与大小通过", false: "底片载荷缺失或摘要不一致"}[ok], Digest: rev.ContentDigest})
+				valid = valid && ok
+			}(rev)
 		}
+		payloadChecks.Wait()
 	}
 	message := "凭据逐项完整性核验通过"
 	if !valid {
