@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,14 +15,17 @@ import (
 	"benzhi-project-a01cfa2a-e194-4175-9b12-49a2ff610cc7/internal/domain"
 )
 
-type FilePayloadStore struct{ root string }
+type FilePayloadStore struct {
+	root     string
+	verifier hash.Hash
+}
 
 func NewFilePayloadStore(dataDir string) (*FilePayloadStore, error) {
 	root := filepath.Join(dataDir, "radiographs")
 	if err := os.MkdirAll(root, 0o750); err != nil {
 		return nil, err
 	}
-	return &FilePayloadStore{root: root}, nil
+	return &FilePayloadStore{root: root, verifier: sha256.New()}, nil
 }
 
 func (s *FilePayloadStore) Put(ctx context.Context, expectedDigest string, source io.Reader, maxBytes int64) (string, string, int64, error) {
@@ -107,11 +111,11 @@ func (s *FilePayloadStore) Verify(ctx context.Context, storageKey, digest string
 	if actualSize != size {
 		return fmt.Errorf("载荷大小不一致")
 	}
-	hash := sha256.New()
-	if _, err := io.Copy(hash, reader); err != nil {
+	s.verifier.Reset()
+	if _, err := io.Copy(s.verifier, reader); err != nil {
 		return err
 	}
-	if hex.EncodeToString(hash.Sum(nil)) != digest {
+	if hex.EncodeToString(s.verifier.Sum(nil)) != digest {
 		return fmt.Errorf("载荷摘要不一致")
 	}
 	return nil
