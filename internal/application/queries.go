@@ -24,6 +24,18 @@ type CredentialEvidenceItem struct {
 	Digest    string `json:"digest,omitempty"`
 }
 
+func (s *Service) verifyCredentialPayload(ctx context.Context, rev domain.FrozenRevision) error {
+	cacheKey := fmt.Sprintf("%s\x00%s\x00%d", rev.StorageKey, rev.ContentDigest, rev.SizeBytes)
+	if _, ok := s.verifiedPayloads.Load(cacheKey); ok {
+		return nil
+	}
+	if err := s.payloads.Verify(ctx, rev.StorageKey, rev.ContentDigest, rev.SizeBytes); err != nil {
+		return err
+	}
+	s.verifiedPayloads.Store(cacheKey, struct{}{})
+	return nil
+}
+
 func (s *Service) GetCase(ctx context.Context, id string) (*domain.InspectionCase, error) {
 	c, err := s.repository.Load(ctx, id)
 	if err == nil {
@@ -79,7 +91,7 @@ func (s *Service) VerifyCredential(ctx context.Context, number string) (*Credent
 	valid := credValid && snapshotValid && versionValid
 	if c.Frozen != nil {
 		for _, rev := range c.Frozen.Revisions {
-			err := s.payloads.Verify(ctx, rev.StorageKey, rev.ContentDigest, rev.SizeBytes)
+			err := s.verifyCredentialPayload(ctx, rev)
 			ok := err == nil
 			items = append(items, CredentialEvidenceItem{Type: "payload", Reference: rev.ID, Valid: ok, Message: map[bool]string{true: "底片载荷摘要与大小通过", false: "底片载荷缺失或摘要不一致"}[ok], Digest: rev.ContentDigest})
 			valid = valid && ok
