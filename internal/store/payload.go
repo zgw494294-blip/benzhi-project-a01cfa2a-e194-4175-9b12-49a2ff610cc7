@@ -45,9 +45,6 @@ func (s *FilePayloadStore) Put(ctx context.Context, expectedDigest string, sourc
 	if closeErr != nil {
 		return "", "", 0, closeErr
 	}
-	if err := ctx.Err(); err != nil {
-		return "", "", 0, err
-	}
 	if written == 0 {
 		return "", "", 0, domain.Invalid("payload", "底片载荷不能为空")
 	}
@@ -73,6 +70,9 @@ func (s *FilePayloadStore) Put(ctx context.Context, expectedDigest string, sourc
 		return "", "", 0, err
 	}
 	if err := os.Chmod(destination, 0o640); err != nil {
+		return "", "", 0, err
+	}
+	if err := ctx.Err(); err != nil {
 		return "", "", 0, err
 	}
 	return filepath.ToSlash(key), digest, written, nil
