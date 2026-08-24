@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>射线底片判读放行台</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>射线底片判读放行台</h1>
+      <p id="serviceState">正在连接服务</p>
+    </div>
+    <div class="identity">
+      <label>操作人<input id="actor" value="张工" autocomplete="name"></label>
+      <label>当前角色<select id="role"><option value="operator">射线操作员</option><option value="reviewer">判读员</option><option value="quality">质量负责人</option></select></label>
+      <button id="refreshButton" class="icon-button" title="刷新任务" aria-label="刷新任务">↻</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="queue-panel">
+      <div class="panel-heading">
+        <div><h2>检测任务</h2><span id="caseCount">0 项</span></div>
+        <button id="newCaseButton" class="primary">新建任务</button>
+      </div>
+      <label class="search"><span>筛选</span><input id="caseFilter" type="search" placeholder="工件或区域"></label>
+      <nav id="caseList" class="case-list" aria-label="检测任务列表"></nav>
+      <section class="credential-search">
+        <h2>凭据验证</h2>
+        <form id="credentialForm">
+          <input id="credentialNumber" required placeholder="输入凭据编号" aria-label="凭据编号">
+          <button class="secondary">查询</button>
+        </form>
+        <div id="credentialResult" class="compact-result" aria-live="polite"></div>
+      </section>
+    </aside>
+
+    <section class="detail-panel" id="detailPanel">
+      <div id="emptyState" class="empty-state">
+        <strong>选择一项检测任务</strong>
+        <span>任务详情、底片修订、判读与放行记录将在这里显示。</span>
+      </div>
+      <div id="caseDetail" hidden>
+        <div class="detail-heading">
+          <div><div class="title-row"><h2 id="caseTitle"></h2><span id="caseStatus" class="status"></span></div><p id="caseMeta"></p></div>
+          <div id="actionBar" class="action-bar"></div>
+        </div>
+        <div id="notice" class="notice" hidden role="status"></div>
+
+        <div class="facts" id="caseFacts"></div>
+
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-tab="revisions">底片修订</button>
+          <button class="tab" data-tab="findings">检查与缺陷</button>
+          <button class="tab" data-tab="rules">验收结论</button>
+          <button class="tab" data-tab="evidence">冻结与放行</button>
+          <button class="tab" data-tab="audit">审计记录</button>
+        </div>
+
+        <section id="tab-revisions" class="tab-panel"><div id="revisionList" class="data-list"></div></section>
+        <section id="tab-findings" class="tab-panel" hidden><div id="findingSummary" class="summary-strip"></div><div id="findingList" class="data-list"></div></section>
+        <section id="tab-rules" class="tab-panel" hidden><div id="ruleList" class="data-list"></div></section>
+        <section id="tab-evidence" class="tab-panel" hidden><div id="evidenceView"></div></section>
+        <section id="tab-audit" class="tab-panel" hidden><div id="auditList" class="data-list"></div></section>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="formDialog">
+    <form method="dialog" class="dialog-shell">
+      <div class="dialog-heading"><h2 id="dialogTitle"></h2><button value="cancel" class="icon-button" title="关闭" aria-label="关闭">×</button></div>
+      <div id="dialogBody" class="dialog-body"></div>
+      <div id="dialogError" class="form-error" hidden></div>
+      <div class="dialog-actions"><button value="cancel" class="secondary">取消</button><button id="dialogSubmit" value="default" class="primary">提交</button></div>
+    </form>
+  </dialog>
+  <div id="busy" class="busy" hidden><span></span><strong>正在处理</strong></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
