@@ -104,8 +104,17 @@ func (s *Service) OpenRevision(ctx context.Context, caseID, revisionID string) (
 	if err := s.payloads.Verify(ctx, rev.StorageKey, rev.ContentDigest, rev.SizeBytes); err != nil {
 		return nil, 0, "", fmt.Errorf("%w: %v", domain.ErrIntegrity, err)
 	}
+	s.openReadersMu.Lock()
+	defer s.openReadersMu.Unlock()
+	if cached, ok := s.openReaders[rev.StorageKey]; ok {
+		return cached.reader, cached.size, rev.ContentDigest, nil
+	}
 	reader, size, err := s.payloads.Open(ctx, rev.StorageKey)
-	return reader, size, rev.ContentDigest, err
+	if err != nil {
+		return nil, 0, "", err
+	}
+	s.openReaders[rev.StorageKey] = cachedRevisionReader{reader: reader, size: size}
+	return reader, size, rev.ContentDigest, nil
 }
 
 func (s *Service) AuditTrail(ctx context.Context, caseID string) ([]domain.AuditEvent, error) {

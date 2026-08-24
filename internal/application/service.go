@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
+	"sync"
 
 	"benzhi-project-a01cfa2a-e194-4175-9b12-49a2ff610cc7/internal/domain"
 )
@@ -12,14 +14,21 @@ import (
 const maxRadiographBytes int64 = 32 << 20
 
 type Service struct {
-	repository Repository
-	payloads   PayloadStore
-	clock      Clock
-	ids        IDGenerator
+	repository    Repository
+	payloads      PayloadStore
+	clock         Clock
+	ids           IDGenerator
+	openReadersMu sync.Mutex
+	openReaders   map[string]cachedRevisionReader
 }
 
 func NewService(repository Repository, payloads PayloadStore, clock Clock, ids IDGenerator) *Service {
-	return &Service{repository: repository, payloads: payloads, clock: clock, ids: ids}
+	return &Service{repository: repository, payloads: payloads, clock: clock, ids: ids, openReaders: make(map[string]cachedRevisionReader)}
+}
+
+type cachedRevisionReader struct {
+	reader io.ReadCloser
+	size   int64
 }
 
 func validateIdempotency(key string) error {
