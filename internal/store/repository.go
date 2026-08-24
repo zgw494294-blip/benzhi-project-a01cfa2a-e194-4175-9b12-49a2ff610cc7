@@ -34,10 +34,20 @@ func (r *SQLiteRepository) Create(ctx context.Context, c *domain.InspectionCase,
 	if err := insertEventAndResult(ctx, tx, event, idempotencyKey, result); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	r.rememberCase(c)
+	return nil
 }
 
 func (r *SQLiteRepository) Load(ctx context.Context, id string) (*domain.InspectionCase, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if cached, ok := r.cachedCase(id); ok {
+		return cached, nil
+	}
 	var encoded []byte
 	err := r.db.QueryRowContext(ctx, `SELECT aggregate_json FROM cases WHERE id=?`, id).Scan(&encoded)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -50,6 +60,7 @@ func (r *SQLiteRepository) Load(ctx context.Context, id string) (*domain.Inspect
 	if err := json.Unmarshal(encoded, &c); err != nil {
 		return nil, fmt.Errorf("解析任务聚合: %w", err)
 	}
+	r.rememberCase(&c)
 	return &c, nil
 }
 
@@ -83,7 +94,11 @@ func (r *SQLiteRepository) Save(ctx context.Context, c *domain.InspectionCase, p
 		}
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	r.rememberCase(c)
+	return nil
 }
 
 func (r *SQLiteRepository) List(ctx context.Context) ([]domain.InspectionCase, error) {

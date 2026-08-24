@@ -5,12 +5,18 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"sync"
 	"time"
 
+	"benzhi-project-a01cfa2a-e194-4175-9b12-49a2ff610cc7/internal/domain"
 	_ "benzhi-project-a01cfa2a-e194-4175-9b12-49a2ff610cc7/internal/sqlite3local"
 )
 
-type SQLiteRepository struct{ db *sql.DB }
+type SQLiteRepository struct {
+	db      *sql.DB
+	cacheMu sync.RWMutex
+	cases   map[string]*domain.InspectionCase
+}
 
 func OpenSQLite(ctx context.Context, dataDir string) (*SQLiteRepository, error) {
 	path := filepath.Join(dataDir, "inspection.db")
@@ -31,7 +37,7 @@ func OpenSQLite(ctx context.Context, dataDir string) (*SQLiteRepository, error) 
 		db.Close()
 		return nil, err
 	}
-	repo := &SQLiteRepository{db: db}
+	repo := &SQLiteRepository{db: db, cases: make(map[string]*domain.InspectionCase)}
 	if err := repo.CheckIntegrity(ctx); err != nil {
 		db.Close()
 		return nil, err
@@ -40,3 +46,16 @@ func OpenSQLite(ctx context.Context, dataDir string) (*SQLiteRepository, error) 
 }
 
 func (r *SQLiteRepository) Close() error { return r.db.Close() }
+
+func (r *SQLiteRepository) cachedCase(id string) (*domain.InspectionCase, bool) {
+	r.cacheMu.RLock()
+	defer r.cacheMu.RUnlock()
+	c, ok := r.cases[id]
+	return c, ok
+}
+
+func (r *SQLiteRepository) rememberCase(c *domain.InspectionCase) {
+	r.cacheMu.Lock()
+	defer r.cacheMu.Unlock()
+	r.cases[c.ID] = c
+}
