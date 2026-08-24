@@ -133,10 +133,7 @@ func (c *InspectionCase) RunCompletenessCheckWithEvidence(idFactory func() strin
 		}
 		return differences[i].Key < differences[j].Key
 	})
-	digests := make(map[string]string, len(active))
-	for _, rev := range active {
-		digests[rev.ID] = rev.ContentDigest
-	}
+	digests := c.revisionDigestsForCheck(active)
 	c.CheckBatches = append(c.CheckBatches, IntegrityCheckBatch{Sequence: sequence, RevisionDigests: digests, RuleSetVersion: c.AcceptanceRuleSet.Version, GeneratedAt: now.UTC(), Passed: c.LastCheckPassed, Problems: problems, Differences: differences})
 	for i := range c.RetakeIssues {
 		if c.RetakeIssues[i].ReplacementRevisionID != "" {
@@ -148,6 +145,19 @@ func (c *InspectionCase) RunCompletenessCheckWithEvidence(idFactory func() strin
 	}
 	c.Touch(now)
 	return generated, nil
+}
+
+func (c *InspectionCase) revisionDigestsForCheck(active []RadiographRevision) map[string]string {
+	var digests map[string]string
+	if n := len(c.CheckBatches); n > 0 {
+		digests = c.CheckBatches[n-1].RevisionDigests
+	} else {
+		digests = make(map[string]string, len(active))
+	}
+	for _, rev := range active {
+		digests[rev.ID] = rev.ContentDigest
+	}
+	return digests
 }
 
 func problemKey(p CheckProblem) string {
