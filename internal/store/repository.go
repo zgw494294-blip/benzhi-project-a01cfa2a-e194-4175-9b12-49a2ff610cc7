@@ -74,16 +74,25 @@ func (r *SQLiteRepository) Save(ctx context.Context, c *domain.InspectionCase, p
 	if changed != 1 {
 		return domain.ErrConflict
 	}
-	if err := writeProjections(ctx, tx, c); err != nil {
+	if err := tx.Commit(); err != nil {
 		return err
 	}
-	if err := insertEventAndResult(ctx, tx, event, idempotencyKey, result); err != nil {
+
+	projectionTx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer projectionTx.Rollback()
+	if err := writeProjections(ctx, projectionTx, c); err != nil {
+		return err
+	}
+	if err := insertEventAndResult(ctx, projectionTx, event, idempotencyKey, result); err != nil {
 		if isConstraint(err) {
 			return domain.ErrConflict
 		}
 		return err
 	}
-	return tx.Commit()
+	return projectionTx.Commit()
 }
 
 func (r *SQLiteRepository) List(ctx context.Context) ([]domain.InspectionCase, error) {
